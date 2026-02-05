@@ -81,14 +81,29 @@ for sig in df["signal"]:
 df["position"] = positions
 
 # -----------------------
-# OUTPUT (LIVE)
-# -----------------------
+# --- OUTPUT (LIVE) robust ---
 last = df.iloc[-1]
 
+# hitta en tidskolumn som finns
+time_col = None
+for c in ["Date", "Datetime", "time", "index"]:
+    if c in df.columns:
+        time_col = c
+        break
+
 print("===== LIVE STRATEGY =====")
-print("DATE:", last["Date"].date())
-print("PRICE:", round(last["Close"], 2))
+if time_col:
+    ts = last[time_col]
+    # om det är timestamp, gör snyggt datum
+    try:
+        print("DATE:", pd.to_datetime(ts).date())
+    except Exception:
+        print("DATE:", ts)
+else:
+    print("DATE: (missing)")
+
+print("PRICE:", round(float(last["Close"]), 2))
 print("REGIME:", last["regime"])
 print("SIGNAL:", last["signal"])
-print("POSITION:", "LONG" if last["position"] == 1 else "FLAT")
+print("POSITION:", "LONG" if int(last["position"]) == 1 else "FLAT")
 print("=========================")
