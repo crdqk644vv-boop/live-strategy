@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from datetime import datetime
+print("VERSION: FIX-001", flush=True)
 
 # =========================
 # CONFIG
@@ -34,7 +35,7 @@ df = df.dropna().reset_index(drop=True)
 # =========================
 # REGIME (BULL / BEAR)
 # =========================
-df["regime"] = np.where(df["Close"].values > df["slow_ma"].values, "BULL", "BEAR")
+df["regime"] = np.where(df["Close"].to_numpy() > df["slow_ma"].to_numpy(), "BULL", "BEAR")
 
 # =========================
 # SIGNAL LOGIC (BASE STRATEGY)
