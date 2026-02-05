@@ -2,101 +2,93 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from datetime import datetime
-print("VERSION: FIX-001", flush=True)
+import time
 
-# =========================
+print("VERSION: FIX-MULTIINDEX", flush=True)
+
+# -----------------------
 # CONFIG
-# =========================
+# -----------------------
 SYMBOL = "BTC-USD"
 START = "2017-01-01"
-FAST_MA = 50
-SLOW_MA = 200
-DONCHIAN_N = 20
 
-# =========================
-# DATA
-# =========================
-df = yf.download(SYMBOL, start=START, interval="1d", auto_adjust=True)
+# -----------------------
+# FETCH DATA
+# -----------------------
+time.sleep(5)
+df = yf.download(
+    SYMBOL,
+    start=START,
+    interval="1d",
+    auto_adjust=True,
+    progress=False
+)
 
-df = df.dropna()
-df["date"] = df.index
+# 🔴 VIKTIG FIX: platta till kolumner
+if isinstance(df.columns, pd.MultiIndex):
+    df.columns = df.columns.get_level_values(0)
 
-# =========================
+df = df.dropna().reset_index()
+
+# -----------------------
 # INDICATORS
-# =========================
-df["fast_ma"] = df["Close"].rolling(FAST_MA).mean()
-df["slow_ma"] = df["Close"].rolling(SLOW_MA).mean()
-
-df["don_high"] = df["High"].rolling(DONCHIAN_N).max()
-df["don_low"] = df["Low"].rolling(DONCHIAN_N).min()
+# -----------------------
+df["fast_ma"] = df["Close"].rolling(50).mean()
+df["slow_ma"] = df["Close"].rolling(200).mean()
+df["don_high"] = df["High"].rolling(20).max()
 
 df = df.dropna().reset_index(drop=True)
 
-# =========================
-# REGIME (BULL / BEAR)
-# =========================
-df["regime"] = np.where(df["Close"].to_numpy() > df["slow_ma"].to_numpy(), "BULL", "BEAR")
+# -----------------------
+# REGIME
+# -----------------------
+df["regime"] = np.where(
+    df["Close"].to_numpy() > df["slow_ma"].to_numpy(),
+    "BULL",
+    "BEAR"
+)
 
-# =========================
-# SIGNAL LOGIC (BASE STRATEGY)
-# =========================
+# -----------------------
+# SIGNALS
+# -----------------------
 df["signal"] = "HOLD"
 
-# Entry: trend up + breakout
-entry_cond = (
+df.loc[
     (df["regime"] == "BULL") &
-    (df["Close"] > df["don_high"].shift(1))
-)
+    (df["Close"] > df["don_high"].shift(1)),
+    "signal"
+] = "ENTER"
 
-# Exit: trend broken
-exit_cond = (
+df.loc[
     (df["Close"] < df["fast_ma"]) |
-    (df["regime"] == "BEAR")
-)
+    (df["regime"] == "BEAR"),
+    "signal"
+] = "EXIT"
 
-df.loc[entry_cond, "signal"] = "ENTER"
-df.loc[exit_cond, "signal"] = "EXIT"
-
-# =========================
-# POSITION STATE MACHINE
-# =========================
+# -----------------------
+# POSITION STATE
+# -----------------------
 position = 0
 positions = []
 
-for i in range(len(df)):
-    sig = df.iloc[i]["signal"]
-
+for sig in df["signal"]:
     if position == 0 and sig == "ENTER":
         position = 1
     elif position == 1 and sig == "EXIT":
         position = 0
-
     positions.append(position)
 
 df["position"] = positions
 
-# =========================
-# LEVERAGE OVERLAY (OPTIONAL)
-# =========================
-def leverage_for_row(row):
-    if row["regime"] == "BULL" and row["position"] == 1:
-        return 2.0
-    return 1.0
-
-df["target_leverage"] = df.apply(leverage_for_row, axis=1)
-
-# =========================
-# LIVE OUTPUT (SENASTE DAGEN)
-# =========================
+# -----------------------
+# OUTPUT (LIVE)
+# -----------------------
 last = df.iloc[-1]
 
-print("===================================")
-print("LIVE STRATEGY DECISION")
-print("===================================")
-print("As of date      :", last["date"].date())
-print("Price           :", round(last["Close"], 2))
-print("Regime          :", last["regime"])
-print("Signal today    :", last["signal"])
-print("Position        :", "LONG" if last["position"] == 1 else "FLAT")
-print("Target leverage :", last["target_leverage"])
-print("===================================")
+print("===== LIVE STRATEGY =====")
+print("DATE:", last["Date"].date())
+print("PRICE:", round(last["Close"], 2))
+print("REGIME:", last["regime"])
+print("SIGNAL:", last["signal"])
+print("POSITION:", "LONG" if last["position"] == 1 else "FLAT")
+print("=========================")
