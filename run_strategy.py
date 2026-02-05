@@ -1,21 +1,21 @@
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from datetime import datetime
 import time
 
-print("VERSION: FIX-MULTIINDEX", flush=True)
+print("VERSION: FINAL-STABLE", flush=True)
 
-# -----------------------
+# ------------------
 # CONFIG
-# -----------------------
+# ------------------
 SYMBOL = "BTC-USD"
 START = "2017-01-01"
 
-# -----------------------
+# ------------------
 # FETCH DATA
-# -----------------------
+# ------------------
 time.sleep(5)
+
 df = yf.download(
     SYMBOL,
     start=START,
@@ -24,88 +24,85 @@ df = yf.download(
     progress=False
 )
 
-# 🔴 VIKTIG FIX: platta till kolumner
+# platta till kolumner (viktigt)
 if isinstance(df.columns, pd.MultiIndex):
     df.columns = df.columns.get_level_values(0)
 
+# säkerställ index + dropna
 df = df.dropna().reset_index()
 
-# -----------------------
-# INDICATORS
-# -----------------------
-df["fast_ma"] = df["Close"].rolling(50).mean()
-df["slow_ma"] = df["Close"].rolling(200).mean()
-df["don_high"] = df["High"].rolling(20).max()
+# ------------------
+# EXTRAHERA SERIES (KRITISKT)
+# ------------------
+close = df["Close"].astype(float)
+high  = df["High"].astype(float)
 
-df = df.dropna().reset_index(drop=True)
+# ------------------
+# INDIKATORER (SERIES)
+# ------------------
+fast_ma = close.rolling(50).mean()
+slow_ma = close.rolling(200).mean()
+don_high = high.rolling(20).max()
 
-# -----------------------
-# REGIME
-# -----------------------
-df["regime"] = np.where(
-    df["Close"].to_numpy() > df["slow_ma"].to_numpy(),
+# kombinera till ny df (alla Series har samma index)
+data = pd.DataFrame({
+    "Date": df["Date"],
+    "Close": close,
+    "fast_ma": fast_ma,
+    "slow_ma": slow_ma,
+    "don_high": don_high
+}).dropna().reset_index(drop=True)
+
+# ------------------
+# REGIME (NU OMÖJLIGT ATT FAILA)
+# ------------------
+data["regime"] = np.where(
+    data["Close"].values > data["slow_ma"].values,
     "BULL",
     "BEAR"
 )
 
-# -----------------------
-# SIGNALS
-# -----------------------
-df["signal"] = "HOLD"
+# ------------------
+# SIGNALER
+# ------------------
+data["signal"] = "HOLD"
 
-df.loc[
-    (df["regime"] == "BULL") &
-    (df["Close"] > df["don_high"].shift(1)),
+data.loc[
+    (data["regime"] == "BULL") &
+    (data["Close"] > data["don_high"].shift(1)),
     "signal"
 ] = "ENTER"
 
-df.loc[
-    (df["Close"] < df["fast_ma"]) |
-    (df["regime"] == "BEAR"),
+data.loc[
+    (data["Close"] < data["fast_ma"]) |
+    (data["regime"] == "BEAR"),
     "signal"
 ] = "EXIT"
 
-# -----------------------
+# ------------------
 # POSITION STATE
-# -----------------------
+# ------------------
 position = 0
 positions = []
 
-for sig in df["signal"]:
+for sig in data["signal"]:
     if position == 0 and sig == "ENTER":
         position = 1
     elif position == 1 and sig == "EXIT":
         position = 0
     positions.append(position)
 
-df["position"] = positions
+data["position"] = positions
 
-# -----------------------
-# --- OUTPUT (LIVE) robust ---
-last = df.iloc[-1]
-
-# hitta en tidskolumn som finns
-time_col = None
-for c in ["Date", "Datetime", "time", "index"]:
-    if c in df.columns:
-        time_col = c
-        break
+# ------------------
+# OUTPUT (LIVE)
+# ------------------
+last = data.iloc[-1]
 
 print("===== LIVE STRATEGY =====")
-if time_col:
-    ts = last[time_col]
-    # om det är timestamp, gör snyggt datum
-    try:
-        print("DATE:", pd.to_datetime(ts).date())
-    except Exception:
-        print("DATE:", ts)
-else:
-    print("DATE: (missing)")
-
-print("PRICE:", round(float(last["Close"]), 2))
+print("DATE:", last["Date"].date())
+print("PRICE:", round(last["Close"], 2))
 print("REGIME:", last["regime"])
 print("SIGNAL:", last["signal"])
-print("POSITION:", "LONG" if int(last["position"]) == 1 else "FLAT")
+print("POSITION:", "LONG" if last["position"] == 1 else "FLAT")
 print("=========================")
-if df is None or df.empty:
-    raise RuntimeError("No data returned from yfinance (empty dataframe)")
