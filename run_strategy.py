@@ -29,10 +29,12 @@ df["slow_ma"] = df["Close"].rolling(SLOW_MA).mean()
 df["don_high"] = df["High"].rolling(DONCHIAN_N).max()
 df["don_low"] = df["Low"].rolling(DONCHIAN_N).min()
 
+df = df.dropna().reset_index(drop=True)
+
 # =========================
 # REGIME (BULL / BEAR)
 # =========================
-df["regime"] = np.where(df["Close"] > df["slow_ma"], "BULL", "BEAR")
+df["regime"] = np.where(df["Close"].values > df["slow_ma"].values, "BULL", "BEAR")
 
 # =========================
 # SIGNAL LOGIC (BASE STRATEGY)
