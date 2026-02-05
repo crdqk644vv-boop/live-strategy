@@ -66,13 +66,19 @@ data["regime"] = np.where(
 # ------------------
 # SIGNALER
 # ------------------
-data["signal"] = "HOLD"
+close_vals = data["Close"].to_numpy()
+don_vals   = data["don_high"].shift(1).to_numpy()
+fast_vals  = data["fast_ma"].to_numpy()
 
-data.loc[
-    (data["regime"] == "BULL") &
-    (data["Close"] > data["don_high"].shift(1)),
-    "signal"
-] = "ENTER"
+signals = np.array(["HOLD"] * len(data), dtype=object)
+
+for i in range(len(data)):
+    if data.loc[i, "regime"] == "BULL" and close_vals[i] > don_vals[i]:
+        signals[i] = "ENTER"
+    elif close_vals[i] < fast_vals[i] or data.loc[i, "regime"] == "BEAR":
+        signals[i] = "EXIT"
+
+data["signal"] = signals
 
 data.loc[
     (data["Close"] < data["fast_ma"]) |
