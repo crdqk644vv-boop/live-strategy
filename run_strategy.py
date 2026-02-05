@@ -107,3 +107,5 @@ print("REGIME:", last["regime"])
 print("SIGNAL:", last["signal"])
 print("POSITION:", "LONG" if int(last["position"]) == 1 else "FLAT")
 print("=========================")
+if df is None or df.empty:
+    raise RuntimeError("No data returned from yfinance (empty dataframe)")
